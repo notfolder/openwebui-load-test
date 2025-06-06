@@ -2,7 +2,8 @@ Grafana起動後、http://localhost:3001 にアクセスし：
 
 ID: admin / PW: admin
 
-DataSource に Prometheus を追加（http://prometheus:9090）
+DataSource に Prometheus を追加
+http://prometheus:9090
 
 ダッシュボードテンプレート例：
 
@@ -54,7 +55,15 @@ Accepted / Handled Connections	リクエスト数の推移
 Reading / Writing / Waiting	状態別接続数（処理中など）
 Request Rate, Bytes	トラフィック関連
 
-ID 893 “Docker and system monitoring” – cAdvisor を前提とした Docker ホストおよびコンテナ両方の主要リソースを一画面で可視化できる（Apache‐ライセンス）
-grafana.com
+1. ID 13496 「Docker and system monitoring」（推奨）
 
-ID 13946 “Docker-cAdvisor” – Grafana Labs 公式が公開するテンプレートで、cAdvisor からの指標を集約し、CPU・メモリ・ネットワーク・ディスク I/O を網羅的に表示できる
+container_labels が空の場合、ダッシュボード中の「ラベル付きフィルタ」部分だけが一部 N/A になりますが、パネル自体は sum by (container_name) (…) のように既存のクエリに置き換えることで動作します。
+
+たとえば、CPU 使用率パネルのクエリを以下のように書き直せば、ラベルが存在しない環境でもコンテナごとの CPU ゲージが得られます：
+
+promql
+コピーする
+編集する
+sum by (container_name) (
+  rate(container_cpu_usage_seconds_total{container_name!=""}[1m])
+) * 100

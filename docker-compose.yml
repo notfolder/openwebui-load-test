@@ -109,6 +109,8 @@ services:
       - "3001:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana  # ← 永続化ボリュームを追加
     networks:
       - monitor-net
 
@@ -118,4 +120,6 @@ networks:
 
 volumes:
   postgres-data:
+    driver: local
+  grafana-data:       # ← Grafana用の永続ボリュームを定義
     driver: local

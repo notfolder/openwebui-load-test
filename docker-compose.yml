@@ -9,6 +9,7 @@ services:
       - "3000:8080"  # Uvicornデフォルトポート
     environment:
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - ENABLE_OPENAI_API_COMPAT=true
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -37,7 +38,7 @@ services:
       - /var/run:/var/run:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
-      - /var/run/docker.sock:/var/run/docker.sock    # ← 追加：Docker API へのアクセス権を付与
+      # - /var/run/docker.sock:/var/run/docker.sock    # ← 追加：Docker API へのアクセス権を付与
     networks:
       - monitor-net
 

@@ -8,10 +8,30 @@ services:
     ports:
       - "3000:8080"  # Uvicornデフォルトポート
     environment:
-      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - OLLAMA_BASE_URL=http://ollama-mock:11434
       - ENABLE_OPENAI_API_COMPAT=true
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    networks:
+      - monitor-net
+    depends_on:
+      - ollama-mock
+
+  ollama-mock:
+    container_name: ollama-mock
+    # コンテナのビルド設定
+    build:
+      # Dockerfileがあるディレクトリ（カレントディレクトリ）を指定します
+      context: .
+      # 使用するDockerfileの名前を指定します（デフォルトで'Dockerfile'が使われます）
+      dockerfile: Dockerfile
+
+    # ポートのマッピング設定（"ホスト側のポート:コンテナ側のポート"）
+    ports:
+      - "11434:11434"
+
+    # 環境変数を設定します
+    # ここで設定した値がDockerfile内のENVの値を上書きします
+    environment:
+      - GUNICORN_WORKERS=21
     networks:
       - monitor-net
 

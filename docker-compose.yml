@@ -4,16 +4,34 @@ services:
 
   openwebui:
     image: ghcr.io/open-webui/open-webui:main
-    container_name: openwebui
-    ports:
-      - "3000:8080"  # Uvicornデフォルトポート
+    # container_name: openwebui
+    # ports:
+    #   - "3000:8080"  # Uvicornデフォルトポート
     environment:
       - OLLAMA_BASE_URL=http://ollama-mock:11434
       - ENABLE_OPENAI_API_COMPAT=true
+      - DATABASE_URL=postgresql://openwebui:openwebui@db:5432/openwebui
     networks:
       - monitor-net
     depends_on:
       - ollama-mock
+      - db
+    # ロードバランシングのために複数起動する設定
+    deploy:
+      mode: replicated
+      replicas: 3 # ここで Open WebUI のインスタンス数を指定 (例: 3つ)
+
+  db:
+    image: postgres:15
+    container_name: openwebui-db
+    environment:
+      POSTGRES_USER: openwebui
+      POSTGRES_PASSWORD: openwebui
+      POSTGRES_DB: openwebui
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - monitor-net
 
   ollama-mock:
     container_name: ollama-mock
@@ -97,3 +115,7 @@ services:
 networks:
   monitor-net:
     driver: bridge
+
+volumes:
+  postgres-data:
+    driver: local

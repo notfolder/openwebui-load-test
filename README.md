@@ -15,7 +15,7 @@ http://prometheus:9090
 方法：
 Grafana の + → Import
 
-ダッシュボード ID：17452
+ダッシュボード ID： 17452
 
 Grafana.com ダッシュボード 11865
 

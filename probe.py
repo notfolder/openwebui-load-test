@@ -2,7 +2,10 @@ import os
 import time
 import json
 import requests
+import urllib3
 from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 OPENWEBUI_URL   = os.getenv("OPENWEBUI_URL",    "http://nginx")
 OPENWEBUI_API_KEY = os.getenv("OPENWEBUI_API_KEY", "")
@@ -56,6 +59,7 @@ def probe():
             stream=True,
             timeout=120,
             proxies={"http": None, "https": None},  # プロキシ環境変数を無視
+            verify=False,                            # 自己署名証明書を許可
         ) as resp:
             print(f"[RES] status={resp.status_code} url={resp.url}", flush=True)
             if resp.history:

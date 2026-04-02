@@ -54,7 +54,9 @@ services:
       - monitor-net
 
   nginx:
-    image: nginx:alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
     container_name: nginx
     ports:
       - "80:80"
@@ -87,6 +89,18 @@ services:
       - "-nginx.scrape-uri=http://nginx/nginx_status"
     ports:
       - "9113:9113"
+    depends_on:
+      - nginx
+    networks:
+      - monitor-net
+
+  nginx-vts-exporter:
+    image: sophos/nginx-vts-exporter:0.10.7
+    container_name: nginx-vts-exporter
+    command:
+      - "-nginx.scrape-uri=http://nginx/status/format/json"
+    ports:
+      - "9913:9913"
     depends_on:
       - nginx
     networks:

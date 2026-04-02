@@ -1,0 +1,26 @@
+FROM nginx:1.27.5 AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpcre3-dev \
+    libpcre2-dev \
+    zlib1g-dev \
+    libssl-dev \
+    git \
+    wget \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN wget -q http://nginx.org/download/nginx-1.27.5.tar.gz \
+ && tar -xzf nginx-1.27.5.tar.gz
+
+RUN git clone --depth=1 https://github.com/vozlt/nginx-module-vts.git
+
+RUN cd nginx-1.27.5 \
+ && ./configure \
+      --with-compat \
+      --add-dynamic-module=../nginx-module-vts \
+ && make modules
+
+FROM nginx:1.27.5
+COPY --from=builder /nginx-1.27.5/objs/ngx_http_vhost_traffic_status_module.so \
+     /usr/lib/nginx/modules/ngx_http_vhost_traffic_status_module.so

@@ -5,7 +5,7 @@ import json
 import threading
 import requests
 import urllib3
-from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
+from prometheus_client import CollectorRegistry, Gauge, generate_latest
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -107,20 +107,17 @@ def probe():
         print(f"[NG]  {exc}", flush=True)
         traceback.print_exc()
 
-    def _no_proxy_handler(url, method, timeout, headers, data):
-        resp = requests.request(
-            method, url,
-            headers=dict(headers) if headers else {},
-            data=data,
-            timeout=timeout or 30,
-            proxies={"http": None, "https": None},
-            verify=False,
-        )
-        if resp.status_code >= 400:
-            raise OSError(f"push_to_gateway error {resp.status_code}: {resp.text}")
-
-    push_to_gateway(PUSHGATEWAY_URL, job="openwebui_probe", registry=registry,
-                    handler=_no_proxy_handler)
+    push_resp = requests.put(
+        f"{PUSHGATEWAY_URL}/metrics/job/openwebui_probe",
+        data=generate_latest(registry),
+        headers={"Content-Type": "text/plain; version=0.0.4; charset=utf-8"},
+        proxies={"http": None, "https": None},
+        verify=False,
+        timeout=30,
+    )
+    if push_resp.status_code >= 400:
+        raise OSError(f"pushgateway error {push_resp.status_code}: {push_resp.text}")
+    print(f"[PUSH] ok ({push_resp.status_code})", flush=True)
 
 
 if __name__ == "__main__":

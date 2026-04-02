@@ -106,7 +106,20 @@ def probe():
         print(f"[NG]  {exc}", flush=True)
         traceback.print_exc()
 
-    push_to_gateway(PUSHGATEWAY_URL, job="openwebui_probe", registry=registry)
+    def _no_proxy_handler(url, method, timeout, headers, data):
+        resp = requests.request(
+            method, url,
+            headers=dict(headers),
+            data=data,
+            timeout=timeout,
+            proxies={"http": None, "https": None},
+            verify=False,
+        )
+        if resp.status_code >= 400:
+            raise OSError(f"push_to_gateway error {resp.status_code}: {resp.text}")
+
+    push_to_gateway(PUSHGATEWAY_URL, job="openwebui_probe", registry=registry,
+                    handler=_no_proxy_handler)
 
 
 if __name__ == "__main__":

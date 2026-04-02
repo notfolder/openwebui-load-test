@@ -1,6 +1,8 @@
 import os
+import signal
 import time
 import json
+import threading
 import requests
 import urllib3
 from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
@@ -108,12 +110,19 @@ def probe():
 
 
 if __name__ == "__main__":
+    stop_event = threading.Event()
+    signal.signal(signal.SIGTERM, lambda *_: stop_event.set())
+    signal.signal(signal.SIGINT,  lambda *_: stop_event.set())
+
     print(f"Probe started  url={OPENWEBUI_URL}  model={OPENWEBUI_MODEL}"
           f"  interval={PROBE_INTERVAL}s", flush=True)
     log_diagnostics()
-    while True:
+
+    while not stop_event.is_set():
         try:
             probe()
         except Exception as exc:
             print(f"[ERROR] {exc}", flush=True)
-        time.sleep(PROBE_INTERVAL)
+        stop_event.wait(timeout=PROBE_INTERVAL)
+
+    print("Probe stopped.", flush=True)

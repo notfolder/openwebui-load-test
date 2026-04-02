@@ -12,6 +12,18 @@ PROBE_INTERVAL  = int(os.getenv("PROBE_INTERVAL", "60"))
 PROBE_QUESTION  = os.getenv("PROBE_QUESTION",   "Hello")
 
 
+def log_diagnostics():
+    print("=== 診断情報 ===", flush=True)
+    print(f"  OPENWEBUI_URL    : {OPENWEBUI_URL}", flush=True)
+    print(f"  OPENWEBUI_MODEL  : {OPENWEBUI_MODEL}", flush=True)
+    print(f"  API_KEY set      : {bool(OPENWEBUI_API_KEY)}", flush=True)
+    for key in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "NO_PROXY", "no_proxy"):
+        val = os.getenv(key)
+        if val:
+            print(f"  [PROXY ENV] {key}={val}", flush=True)
+    print("================", flush=True)
+
+
 def probe():
     registry  = CollectorRegistry()
     g_ttft    = Gauge("openwebui_ttft_seconds",
@@ -33,15 +45,22 @@ def probe():
 
     ttft  = None
     start = time.monotonic()
+    target_url = f"{OPENWEBUI_URL}/api/chat/completions"
+    print(f"[REQ] POST {target_url}", flush=True)
 
     try:
         with requests.post(
-            f"{OPENWEBUI_URL}/api/chat/completions",
+            target_url,
             headers=headers,
             json=body,
             stream=True,
             timeout=120,
+            proxies={"http": None, "https": None},  # プロキシ環境変数を無視
         ) as resp:
+            print(f"[RES] status={resp.status_code} url={resp.url}", flush=True)
+            if resp.history:
+                for r in resp.history:
+                    print(f"[REDIRECT] {r.status_code} {r.url} -> {r.headers.get('Location')}", flush=True)
             resp.raise_for_status()
 
             for raw in resp.iter_lines():
@@ -73,11 +92,13 @@ def probe():
         print(f"[OK]  TTFT={ttft:.3f}s  Total={total:.3f}s", flush=True)
 
     except Exception as exc:
+        import traceback
         total = time.monotonic() - start
         g_ttft.set(0)
         g_total.set(total)
         g_success.set(0)
         print(f"[NG]  {exc}", flush=True)
+        traceback.print_exc()
 
     push_to_gateway(PUSHGATEWAY_URL, job="openwebui_probe", registry=registry)
 
@@ -85,6 +106,7 @@ def probe():
 if __name__ == "__main__":
     print(f"Probe started  url={OPENWEBUI_URL}  model={OPENWEBUI_MODEL}"
           f"  interval={PROBE_INTERVAL}s", flush=True)
+    log_diagnostics()
     while True:
         try:
             probe()

@@ -95,7 +95,8 @@ def probe():
         g_ttft.set(ttft if ttft is not None else 0)
         g_total.set(total)
         g_success.set(1)
-        print(f"[OK]  TTFT={ttft:.3f}s  Total={total:.3f}s", flush=True)
+        ttft_val = ttft if ttft is not None else 0.0
+        print(f"[OK]  TTFT={ttft_val:.3f}s  Total={total:.3f}s", flush=True)
 
     except Exception as exc:
         import traceback
@@ -109,9 +110,9 @@ def probe():
     def _no_proxy_handler(url, method, timeout, headers, data):
         resp = requests.request(
             method, url,
-            headers=dict(headers),
+            headers=dict(headers) if headers else {},
             data=data,
-            timeout=timeout,
+            timeout=timeout or 30,
             proxies={"http": None, "https": None},
             verify=False,
         )
@@ -135,7 +136,9 @@ if __name__ == "__main__":
         try:
             probe()
         except Exception as exc:
+            import traceback
             print(f"[ERROR] {exc}", flush=True)
+            traceback.print_exc()
         stop_event.wait(timeout=PROBE_INTERVAL)
 
     print("Probe stopped.", flush=True)

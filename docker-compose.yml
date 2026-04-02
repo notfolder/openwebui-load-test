@@ -106,6 +106,32 @@ services:
     networks:
       - monitor-net
 
+  pushgateway:
+    image: prom/pushgateway:latest
+    container_name: pushgateway
+    ports:
+      - "9091:9091"
+    networks:
+      - monitor-net
+
+  openwebui-probe:
+    build:
+      context: .
+      dockerfile: Dockerfile.probe
+    container_name: openwebui-probe
+    environment:
+      - OPENWEBUI_URL=http://nginx
+      - OPENWEBUI_MODEL=dummy:latest
+      - OPENWEBUI_API_KEY=          # OpenWebUI の API キーを設定
+      - PUSHGATEWAY_URL=http://pushgateway:9091
+      - PROBE_INTERVAL=60           # 計測間隔(秒)
+      - PROBE_QUESTION=Hello
+    depends_on:
+      - nginx
+      - pushgateway
+    networks:
+      - monitor-net
+
   prometheus:
     image: prom/prometheus
     container_name: prometheus

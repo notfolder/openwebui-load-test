@@ -31,11 +31,14 @@ nginx:80/metrics  ←  Prometheus (scrape)  →  Grafana
 
 ### 推奨ダッシュボード
 
-| ID | 名前 | 特徴 |
-|----|------|------|
-| **2949** | Nginx VTS Stats | 定番。リクエスト数・レスポンスタイム・接続数 |
-| **11967** | Nginx VTS/STS Performance Metrics | upstream 詳細・レスポンスタイム中心 |
-| **24237** | Nginx VTS - Comprehensive Monitoring | 最も詳細。キャッシュ・ステータスコード分布 |
+| ID | 名前 | 動作確認 | 特徴 |
+|----|------|:-------:|------|
+| **9785** | Nginx VTS | ✅ 動作確認済み | `nginx_vts_*` メトリクスにそのまま対応 |
+| **2949** | Nginx VTS Stats | 未確認 | 定番。リクエスト数・レスポンスタイム・接続数 |
+| **11967** | Nginx VTS/STS Performance Metrics | ❌ InfluxDB用 | このプロジェクトでは使用不可 |
+| **24237** | Nginx VTS - Comprehensive Monitoring | 未確認 | 最も詳細。キャッシュ・ステータスコード分布 |
+
+**→ ID: 9785 を使用すること。**
 
 ---
 

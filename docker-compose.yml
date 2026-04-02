@@ -94,18 +94,6 @@ services:
     networks:
       - monitor-net
 
-  nginx-vts-exporter:
-    image: sophos/nginx-vts-exporter:0.10.7
-    container_name: nginx-vts-exporter
-    command:
-      - "-nginx.scrape-uri=http://nginx/status/format/json"
-    ports:
-      - "9913:9913"
-    depends_on:
-      - nginx
-    networks:
-      - monitor-net
-
   pushgateway:
     image: prom/pushgateway:latest
     container_name: pushgateway

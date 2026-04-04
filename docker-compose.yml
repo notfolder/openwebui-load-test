@@ -56,23 +56,51 @@ services:
     networks:
       - monitor-net
 
+  litellm-redis:
+    image: redis:7-alpine
+    container_name: litellm-redis
+    networks:
+      - monitor-net
+
+  litellm-db:
+    image: postgres:15
+    container_name: litellm-db
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: litellm
+      POSTGRES_DB: litellm
+    volumes:
+      - litellm-postgres-data:/var/lib/postgresql/data
+    networks:
+      - monitor-net
+
   litellm:
-    image: ghcr.io/berriai/litellm:main-v1.72.6-stable
-    container_name: litellm
+    # database 対応イメージ (Prisma 込み) を使用: Virtual Keys・利用量トラッキング有効
+    image: ghcr.io/berriai/litellm-database:main-v1.72.6-stable
+    # container_name は外す (replicas > 1 のため)
     ports:
       - "4000:4000"
     volumes:
       - ./litellm_config.yaml:/app/config.yaml:ro
     environment:
+      # LiteLLM DB (Virtual Keys・利用量トラッキング)
+      - DATABASE_URL=postgresql://litellm:litellm@litellm-db:5432/litellm
+      - LITELLM_MASTER_KEY=sk-1234                              # general_settings.master_key と揃える
       # Langfuse プロジェクトキー (Langfuse UI でプロジェクト作成後に取得して差し替える)
-      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
-      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-pk-lf-CHANGEME}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-sk-lf-CHANGEME}
       - LANGFUSE_HOST=http://langfuse:3000
     command: ["--config", "/app/config.yaml", "--port", "4000", "--num_workers", "8"]
     depends_on:
       - ollama-mock
+      - litellm-db
+      - litellm-redis
     networks:
       - monitor-net
+    # LiteLLM を複数インスタンスで多重化
+    deploy:
+      mode: replicated
+      replicas: 3
 
   nginx:
     build:
@@ -211,6 +239,8 @@ networks:
 
 volumes:
   postgres-data:
+    driver: local
+  litellm-postgres-data:   # ← LiteLLM 用 PostgreSQL
     driver: local
   langfuse-postgres-data:  # ← Langfuse 用 PostgreSQL
     driver: local

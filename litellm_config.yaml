@@ -6,6 +6,14 @@ model_list:
 
 general_settings:
   master_key: sk-1234               # OpenWebUI / JMeter の OPENAI_API_KEY に合わせる
+                                    # docker-compose.yml の LITELLM_MASTER_KEY と揃える
+
+router_settings:
+  redis_host: litellm-redis         # 複数インスタンス間で rpm/tpm カウントを共有
+  redis_port: 6379
+  routing_strategy: least-busy      # アクティブリクエストが最も少ないインスタンスに転送
+  num_retries: 2
+  timeout: 30
 
 litellm_settings:
   # Langfuse へトレース送信 (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY は環境変数で注入)

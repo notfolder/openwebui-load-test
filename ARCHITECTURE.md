@@ -22,7 +22,13 @@ graph TD
 
         DB["db (PostgreSQL 15)\n:5432\nVolume: postgres-data"]
 
-        LiteLLM["litellm :4000\nv1.72.6-stable\n(LLMプロキシ / ルーティング)"]
+        subgraph litellm-stack ["LiteLLM スタック (replicas: 3)"]
+            LT1["litellm #1\n:4000"]
+            LT2["litellm #2\n:4000"]
+            LT3["litellm #3\n:4000"]
+            LiteLLMDB["litellm-db (PostgreSQL 15)\n:5432\nVolume: litellm-postgres-data"]
+            LiteLLMRedis["litellm-redis\nRedis 7\n(rpm/tpm 共有)"]        
+        end
         Mock["ollama-mock :11434\nDockerfile\n(Ollamaモックサーバ)"]
 
         subgraph langfuse-stack ["Langfuse スタック"]
@@ -47,10 +53,14 @@ graph TD
     Nginx -->|"ip_hash LB"| OW3
 
     OW1 & OW2 & OW3 -->|"PostgreSQL"| DB
-    OW1 & OW2 & OW3 -->|"OpenAI API"| LiteLLM
+    OW1 & OW2 & OW3 -->|"OpenAI API (least-busy LB)"| LT1
+    OW1 & OW2 & OW3 -->|"OpenAI API (least-busy LB)"| LT2
+    OW1 & OW2 & OW3 -->|"OpenAI API (least-busy LB)"| LT3
 
-    LiteLLM -->|"Ollama API"| Mock
-    LiteLLM -->|"トレース送信"| Langfuse
+    LT1 & LT2 & LT3 -->|"Ollama API"| Mock
+    LT1 & LT2 & LT3 -->|"トレース送信"| Langfuse
+    LT1 & LT2 & LT3 -->|"Virtual Keys / 利用量"| LiteLLMDB
+    LT1 & LT2 & LT3 -->|"rpm/tpm 共有"| LiteLLMRedis
 
     Langfuse --> LangfuseDB
     Langfuse --> LangfuseRedis
@@ -60,7 +70,9 @@ graph TD
     Prometheus -->|"scrape /metrics (VTS)"| Nginx
     Prometheus -->|"scrape :8080"| cAdvisor
     Prometheus -->|"scrape :9091"| Pushgateway
-    Prometheus -->|"scrape :4000/metrics"| LiteLLM
+    Prometheus -->|"scrape :4000/metrics"| LT1
+    Prometheus -->|"scrape :4000/metrics"| LT2
+    Prometheus -->|"scrape :4000/metrics"| LT3
     Grafana -->|"Query"| Prometheus
 ```
 
@@ -71,7 +83,9 @@ graph TD
 | **nginx** | `Dockerfile.nginx` (nginx + VTS モジュール) | `80` | リバースプロキシ / ip_hash ロードバランサ |
 | **openwebui** × 3 | `ghcr.io/open-webui/open-webui:main` | — | チャット UI・API サーバ（3レプリカ） |
 | **db** | `postgres:15` | — | OpenWebUI 用 PostgreSQL |
-| **litellm** | `ghcr.io/berriai/litellm:main-v1.72.6-stable` | `4000` | LLM プロキシ・モデルルーティング・Langfuse 連携 |
+| **litellm** × 3 | `ghcr.io/berriai/litellm-database:main-v1.72.6-stable` | `4000` | LLM プロキシ・モデルルーティング・Langfuse 連携（3レプリカ） |
+| **litellm-db** | `postgres:15` | — | LiteLLM 用 PostgreSQL（Virtual Keys・利用量管理） |
+| **litellm-redis** | `redis:7-alpine` | — | LiteLLM 複数インスタンス間 rpm/tpm 状態共有 |
 | **ollama-mock** | `Dockerfile` (Python/Gunicorn) | `11434` | Ollama API モックサーバ |
 | **langfuse** | `langfuse/langfuse:2.84.0` | `3002` | LLM トレース・オブザーバビリティ UI |
 | **langfuse-db** | `postgres:15` | — | Langfuse 用 PostgreSQL |
@@ -96,10 +110,12 @@ graph TD
 ## データフロー
 
 ```
-[JMeter] ──HTTP──▶ [nginx :80] ──ip_hash LB──▶ [openwebui ×3] ──OpenAI API──▶ [litellm :4000]
+[JMeter] ──HTTP──▶ [nginx :80] ──ip_hash LB──▶ [openwebui ×3] ──OpenAI API──▶ [litellm ×3 (least-busy LB)]
                                                        │                               │
                                                        └──PostgreSQL──▶ [db]           ├──Ollama API──▶ [ollama-mock]
-                                                                                       └──トレース────▶ [langfuse :3002]
+                                                                                       ├──トレース────▶ [langfuse :3002]
+                                                                                       ├──Virtual Keys─▶ [litellm-db]
+                                                                                       └──rpm/tpm──────▶ [litellm-redis]
 
 [openwebui-probe] ──HTTP──▶ [nginx] ──▶ [openwebui] ──▶ [litellm] ──▶ [ollama-mock]
         │
@@ -108,7 +124,7 @@ graph TD
 [cadvisor] ──scrape──▶ [prometheus]
 [nginx-exporter] ──scrape──▶ [prometheus]
 [nginx VTS /metrics] ──scrape──▶ [prometheus]
-[litellm /metrics] ──scrape──▶ [prometheus]
+[litellm ×3 /metrics] ──scrape──▶ [prometheus]
 ```
 
 ## Langfuse 初期セットアップ手順

@@ -14,6 +14,7 @@ services:
       - ENABLE_OPENAI_API_COMPAT=true
       - DATABASE_URL=postgresql://openwebui:openwebui@db:5432/openwebui
       - RAG_EMBEDDING_MODEL=
+      - WEBUI_SECRET_KEY=change-this-to-a-random-secret-key-32b # JWT署名キー(32バイト以上, 本番では必ず変更)
     networks:
       - monitor-net
     depends_on:
@@ -78,8 +79,8 @@ services:
     # database 対応イメージ (Prisma 込み) を使用: Virtual Keys・利用量トラッキング有効
     image: ghcr.io/berriai/litellm-database:main-v1.72.6-stable
     # container_name は外す (replicas > 1 のため)
-    ports:
-      - "4000:4000"
+    # ports は外す (replicas > 1 のため同一ホストポートに複数バインド不可)
+    # 内部通信は litellm:4000 (Docker DNS) で到達するため公開不要
     volumes:
       - ./litellm_config.yaml:/app/config.yaml:ro
     environment:

@@ -1,0 +1,13 @@
+model_list:
+  - model_name: dummy:latest        # OpenWebUI / JMeter からリクエストするモデル名
+    litellm_params:
+      model: ollama/dummy:latest    # LiteLLM が ollama-mock に転送する際のモデル識別子
+      api_base: http://ollama-mock:11434
+
+general_settings:
+  master_key: sk-1234               # OpenWebUI / JMeter の OPENAI_API_KEY に合わせる
+
+litellm_settings:
+  # Langfuse へトレース送信 (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY は環境変数で注入)
+  success_callback: ["langfuse", "prometheus"]
+  failure_callback: ["langfuse", "prometheus"]

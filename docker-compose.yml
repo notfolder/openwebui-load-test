@@ -8,13 +8,16 @@ services:
     # ports:
     #   - "3000:8080"  # Uvicornデフォルトポート
     environment:
-      - OLLAMA_BASE_URL=http://ollama-mock:11434
+      - OLLAMA_BASE_URL=                                        # LiteLLM 経由に切り替えたため無効化
+      - OPENAI_API_BASE_URL=http://litellm:4000                # LiteLLM OpenAI 互換エンドポイント
+      - OPENAI_API_KEY=sk-1234                                  # litellm_config.yaml の master_key に合わせる
       - ENABLE_OPENAI_API_COMPAT=true
       - DATABASE_URL=postgresql://openwebui:openwebui@db:5432/openwebui
+      - RAG_EMBEDDING_MODEL=
     networks:
       - monitor-net
     depends_on:
-      - ollama-mock
+      - litellm
       - db
     # ロードバランシングのために複数起動する設定
     deploy:
@@ -50,6 +53,24 @@ services:
     # ここで設定した値がDockerfile内のENVの値を上書きします
     environment:
       - GUNICORN_WORKERS=21
+    networks:
+      - monitor-net
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-v1.72.6-stable
+    container_name: litellm
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./litellm_config.yaml:/app/config.yaml:ro
+    environment:
+      # Langfuse プロジェクトキー (Langfuse UI でプロジェクト作成後に取得して差し替える)
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+      - LANGFUSE_HOST=http://langfuse:3000
+    command: ["--config", "/app/config.yaml", "--port", "4000", "--num_workers", "8"]
+    depends_on:
+      - ollama-mock
     networks:
       - monitor-net
 
@@ -120,6 +141,43 @@ services:
     networks:
       - monitor-net
 
+  langfuse-db:
+    image: postgres:15
+    container_name: langfuse-db
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: langfuse
+      POSTGRES_DB: langfuse
+    volumes:
+      - langfuse-postgres-data:/var/lib/postgresql/data
+    networks:
+      - monitor-net
+
+  langfuse-redis:
+    image: redis:7-alpine
+    container_name: langfuse-redis
+    networks:
+      - monitor-net
+
+  langfuse:
+    image: langfuse/langfuse:2.84.0
+    container_name: langfuse
+    ports:
+      - "3002:3000"
+    environment:
+      - DATABASE_URL=postgresql://langfuse:langfuse@langfuse-db:5432/langfuse
+      - NEXTAUTH_SECRET=changeme-secret-32-chars-minimum-xxx   # 本番では必ず変更
+      - NEXTAUTH_URL=http://localhost:3002
+      - SALT=changeme-salt-change-in-production                # 本番では必ず変更
+      - REDIS_HOST=langfuse-redis
+      - REDIS_PORT=6379
+      - TELEMETRY_ENABLED=false
+    depends_on:
+      - langfuse-db
+      - langfuse-redis
+    networks:
+      - monitor-net
+
   prometheus:
     image: prom/prometheus
     container_name: prometheus
@@ -154,7 +212,9 @@ networks:
 volumes:
   postgres-data:
     driver: local
-  grafana-data:       # ← Grafana用の永続ボリュームを定義
+  langfuse-postgres-data:  # ← Langfuse 用 PostgreSQL
     driver: local
-  prometheus-data:    # ← Prometheus用の永続ボリュームを定義
+  grafana-data:            # ← Grafana用の永続ボリュームを定義
+    driver: local
+  prometheus-data:         # ← Prometheus用の永続ボリュームを定義
     driver: local

@@ -1,3 +1,4 @@
+import json
 import time
 from flask import Flask, request, Response, jsonify
 
@@ -14,10 +15,12 @@ def api_generate():
     if stream:
         def generate_stream():
             for i in range(10):
-                yield f'{ {"model": model, "done": False, "response": DUMMY_TEXT, "count": i+1} }\n'
+                chunk = {"model": model, "done": False, "response": DUMMY_TEXT, "count": i+1}
+                yield json.dumps(chunk) + "\n"
                 time.sleep(1)
-            yield f'{ {"model": model, "done": True, "response": DUMMY_TEXT, "count": 10} }\n'
-        return Response(generate_stream(), mimetype='application/json')
+            last_chunk = {"model": model, "done": True, "response": DUMMY_TEXT, "count": 10}
+            yield json.dumps(last_chunk) + "\n"
+        return Response(generate_stream(), mimetype='application/x-ndjson')
     else:
         return jsonify({
             "model": model,
@@ -29,7 +32,6 @@ def api_generate():
 # /api/chat (streaming, NDJSON)
 @app.route('/api/chat', methods=['POST'])
 def api_chat():
-    import json
     data = request.get_json(force=True)
     stream = data.get('stream', True)
     model = data.get('model', 'dummy')

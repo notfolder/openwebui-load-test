@@ -9,7 +9,7 @@ services:
     #   - "3000:8080"  # Uvicornデフォルトポート
     environment:
       - OLLAMA_BASE_URL=                                        # LiteLLM 経由に切り替えたため無効化
-      - OPENAI_API_BASE_URL=http://litellm:4000                # LiteLLM OpenAI 互換エンドポイント
+      - OPENAI_API_BASE_URL=http://litellm-nginx:4001           # litellm-nginx (least_conn LB) 経由
       - OPENAI_API_KEY=sk-1234                                  # litellm_config.yaml の master_key に合わせる
       - ENABLE_OPENAI_API_COMPAT=true
       - DATABASE_URL=postgresql://openwebui:openwebui@db:5432/openwebui
@@ -18,7 +18,7 @@ services:
     networks:
       - monitor-net
     depends_on:
-      - litellm
+      - litellm-nginx
       - db
     # ロードバランシングのために複数起動する設定
     deploy:
@@ -57,6 +57,19 @@ services:
     networks:
       - monitor-net
 
+  litellm-nginx:
+    image: nginx:alpine
+    container_name: litellm-nginx
+    # ホストには公開しない（Docker 内部通信のみ）
+    ports:
+      - "4001:4001"
+    volumes:
+      - ./litellm-nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - litellm
+    networks:
+      - monitor-net
+
   litellm-redis:
     image: redis:7-alpine
     container_name: litellm-redis
@@ -87,6 +100,9 @@ services:
       # LiteLLM DB (Virtual Keys・利用量トラッキング)
       - DATABASE_URL=postgresql://litellm:litellm@litellm-db:5432/litellm
       - LITELLM_MASTER_KEY=sk-1234                              # general_settings.master_key と揃える
+      # LiteLLM UI ログイン認証情報 (未設定だとレプリカごとにランダム生成され不一致になる)
+      - UI_USERNAME=admin
+      - UI_PASSWORD=sk-1234                                     # 本番では必ず変更
       # Langfuse プロジェクトキー (Langfuse UI でプロジェクト作成後に取得して差し替える)
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-pk-lf-CHANGEME}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-sk-lf-CHANGEME}
@@ -198,6 +214,7 @@ services:
       - NEXTAUTH_SECRET=changeme-secret-32-chars-minimum-xxx   # 本番では必ず変更
       - NEXTAUTH_URL=http://localhost:3002
       - SALT=changeme-salt-change-in-production                # 本番では必ず変更
+      - ENCRYPTION_KEY=${LANGFUSE_ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}  # openssl rand -hex 32 で生成して .env に設定
       - REDIS_HOST=langfuse-redis
       - REDIS_PORT=6379
       - TELEMETRY_ENABLED=false

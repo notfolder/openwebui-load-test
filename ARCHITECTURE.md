@@ -22,6 +22,8 @@ graph TD
 
         DB["db (PostgreSQL 15)\n:5432\nVolume: postgres-data"]
 
+        LiteLLMNginx["litellm-nginx :4001\n(nginx least_conn LB)"]
+
         subgraph litellm-stack ["LiteLLM スタック (replicas: 3)"]
             LT1["litellm #1\n:4000"]
             LT2["litellm #2\n:4000"]
@@ -53,9 +55,11 @@ graph TD
     Nginx -->|"ip_hash LB"| OW3
 
     OW1 & OW2 & OW3 -->|"PostgreSQL"| DB
-    OW1 & OW2 & OW3 -->|"OpenAI API (least-busy LB)"| LT1
-    OW1 & OW2 & OW3 -->|"OpenAI API (least-busy LB)"| LT2
-    OW1 & OW2 & OW3 -->|"OpenAI API (least-busy LB)"| LT3
+    OW1 & OW2 & OW3 -->|"OpenAI API"| LiteLLMNginx
+
+    LiteLLMNginx -->|"least_conn LB"| LT1
+    LiteLLMNginx -->|"least_conn LB"| LT2
+    LiteLLMNginx -->|"least_conn LB"| LT3
 
     LT1 & LT2 & LT3 -->|"Ollama API"| Mock
     LT1 & LT2 & LT3 -->|"トレース送信"| Langfuse
@@ -70,9 +74,7 @@ graph TD
     Prometheus -->|"scrape /metrics (VTS)"| Nginx
     Prometheus -->|"scrape :8080"| cAdvisor
     Prometheus -->|"scrape :9091"| Pushgateway
-    Prometheus -->|"scrape :4000/metrics"| LT1
-    Prometheus -->|"scrape :4000/metrics"| LT2
-    Prometheus -->|"scrape :4000/metrics"| LT3
+    Prometheus -->|"scrape :4001/metrics"| LiteLLMNginx
     Grafana -->|"Query"| Prometheus
 ```
 
@@ -81,6 +83,7 @@ graph TD
 | サービス | イメージ / Dockerfile | ホストポート | 役割 |
 |---|---|---|---|
 | **nginx** | `Dockerfile.nginx` (nginx + VTS モジュール) | `80` | リバースプロキシ / ip_hash ロードバランサ |
+| **litellm-nginx** | `nginx:alpine` | — | LiteLLM 前段 least_conn ロードバランサ |
 | **openwebui** × 3 | `ghcr.io/open-webui/open-webui:main` | — | チャット UI・API サーバ（3レプリカ） |
 | **db** | `postgres:15` | — | OpenWebUI 用 PostgreSQL |
 | **litellm** × 3 | `ghcr.io/berriai/litellm-database:main-v1.72.6-stable` | `4000` | LLM プロキシ・モデルルーティング・Langfuse 連携（3レプリカ） |
@@ -105,26 +108,27 @@ graph TD
 | `nginx-exporter` | `nginx-exporter:9113` | Nginx 接続数・リクエスト数 |
 | `nginx-vts` | `nginx:80/metrics` | VTS によるバーチャルホスト別トラフィック |
 | `pushgateway` | `pushgateway:9091` | Probe の TTFT・レスポンス時間・成功率 |
-| `litellm` | `litellm:4000/metrics` | LiteLLM リクエスト数・レイテンシ・モデル別集計 |
+| `litellm` | `litellm-nginx:4001/metrics` | LiteLLM リクエスト数・レイテンシ・モデル別集計 |
 
 ## データフロー
 
 ```
-[JMeter] ──HTTP──▶ [nginx :80] ──ip_hash LB──▶ [openwebui ×3] ──OpenAI API──▶ [litellm ×3 (least-busy LB)]
+[JMeter] ──HTTP──▶ [nginx :80] ──ip_hash LB──▶ [openwebui ×3] ──OpenAI API──▶ [litellm-nginx :4001 (least_conn LB)]
                                                        │                               │
-                                                       └──PostgreSQL──▶ [db]           ├──Ollama API──▶ [ollama-mock]
-                                                                                       ├──トレース────▶ [langfuse :3002]
-                                                                                       ├──Virtual Keys─▶ [litellm-db]
-                                                                                       └──rpm/tpm──────▶ [litellm-redis]
+                                                       └──PostgreSQL──▶ [db]           └──────────▶ [litellm ×3]
+                                                                                               ├──Ollama API──▶ [ollama-mock]
+                                                                                               ├──トレース────▶ [langfuse :3002]
+                                                                                               ├──Virtual Keys─▶ [litellm-db]
+                                                                                               └──rpm/tpm──────▶ [litellm-redis]
 
-[openwebui-probe] ──HTTP──▶ [nginx] ──▶ [openwebui] ──▶ [litellm] ──▶ [ollama-mock]
+[openwebui-probe] ──HTTP──▶ [nginx] ──▶ [openwebui] ──▶ [litellm-nginx] ──▶ [litellm] ──▶ [ollama-mock]
         │
         └──Push──▶ [pushgateway] ──scrape──▶ [prometheus] ──▶ [grafana]
 
 [cadvisor] ──scrape──▶ [prometheus]
 [nginx-exporter] ──scrape──▶ [prometheus]
 [nginx VTS /metrics] ──scrape──▶ [prometheus]
-[litellm ×3 /metrics] ──scrape──▶ [prometheus]
+[litellm-nginx :4001/metrics] ──scrape──▶ [prometheus]
 ```
 
 ## Langfuse 初期セットアップ手順

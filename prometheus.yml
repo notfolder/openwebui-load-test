@@ -22,5 +22,5 @@ scrape_configs:
 
   - job_name: 'litellm'
     static_configs:
-      - targets: ['litellm:4000']
+      - targets: ['litellm-nginx:4001']  # nginx LB 経由でいずれかの litellm インスタンスをスクレイプ
     metrics_path: /metrics
